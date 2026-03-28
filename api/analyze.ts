@@ -1,3 +1,4 @@
+declare const process: any;
 export default async function handler(req: any, res: any) {
   try {
     if (req.method !== "POST") {
