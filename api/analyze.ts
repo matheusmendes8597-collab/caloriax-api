@@ -1,5 +1,4 @@
 // api/analyze.ts
-
 export const config = {
   api: {
     bodyParser: true
@@ -9,7 +8,6 @@ export const config = {
 declare const process: any;
 
 export default async function handler(req: any, res: any) {
-  // Headers CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -25,23 +23,19 @@ export default async function handler(req: any, res: any) {
 
     const { text, image } = req.body || {};
 
-    // Se não houver texto nem imagem
     if (!text && !image) {
       return res.status(400).json({ error: "Envie texto ou imagem" });
     }
 
-    // Validar imagem apenas se houver
-    const hasValidImage =
-      typeof image === "string" &&
-      (image.startsWith("http://") || image.startsWith("https://") || image.startsWith("data:image/"));
-
-    // Conteúdo para o modelo
     const content: any[] = [];
 
+    // Prompt reforçado para análise precisa
     content.push({
       type: "input_text",
-      text: `Analise a refeição com base na imagem e/ou texto.
-Seja preciso e estime quantidades reais.
+      text: `
+Analise a refeição baseada na imagem e/ou no texto fornecido. 
+Se for apenas texto, use as quantidades mencionadas. 
+Se for imagem, identifique alimentos e estimativa de quantidades.
 
 Responda EXATAMENTE neste formato:
 
@@ -50,26 +44,28 @@ Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-<uma única frase curta (máx. 10 a 15 palavras), natural e humana, sobre a qualidade da refeição.
-Se for saudável, elogie.
-Se for mediana, sugira melhoria leve.
-Se for pouco saudável, faça um alerta leve sem julgar.
-Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
+<uma única frase curta (máx. 10-15 palavras) sobre a refeição:
+- se saudável → elogiar
+- se mediana → sugerir melhoria leve
+- se pouco saudável → alerta leve
+- se não for possível analisar → dizer "Não é possível analisar. Envie apenas alimentos."
+Inclua 1 ou 2 emojis que combinem com o contexto.>
 
-Se a imagem ou descrição não representar alimento, responda exatamente:
-"Não é possível analisar. Envie apenas alimentos."
+Se não for alimento ou não for possível determinar calorias, proteínas, carboidratos e gorduras:
+- coloque todos como 0
+- use frase: "Não é possível analisar. Envie apenas alimentos."
 
-Sem explicações extras.`
+Não forneça explicações extras.
+      `
     });
 
-    if (hasValidImage) {
+    if (image) {
       content.push({
         type: "input_image",
         image_url: image
       });
     }
 
-    // Chamada para API OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -96,13 +92,12 @@ Sem explicações extras.`
       });
     }
 
-    // Extrair resultado
     const result =
       data.output_text ||
       data.output?.map((o: any) =>
         o.content?.map((c: any) => c.text).join("")
       ).join("") ||
-      "Sem resposta";
+      "Não é possível analisar. Envie apenas alimentos.";
 
     return res.status(200).json({ result });
 
