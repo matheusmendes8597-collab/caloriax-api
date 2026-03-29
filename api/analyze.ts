@@ -9,13 +9,14 @@ declare const process: any;
 function isValidImage(image: string) {
   if (!image || typeof image !== "string") return false;
 
-  // Verifica se é URL válida (http/https)
-  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)$/i.test(image)) return true;
+  // Verifica se é URL válida
+  if (image.startsWith("http://") || image.startsWith("https://")) {
+    return /\.(jpeg|jpg|png|gif|webp)$/i.test(image);
+  }
 
-  // Verifica se é Base64 válido (início típico de data URI)
-  if (/^data:image\/(jpeg|png|gif|webp);base64,[A-Za-z0-9+/=]+$/i.test(image)) return true;
-
-  return false;
+  // Verifica se é base64 válido
+  const base64Pattern = /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/;
+  return base64Pattern.test(image);
 }
 
 export default async function handler(req: any, res: any) {
@@ -32,20 +33,31 @@ export default async function handler(req: any, res: any) {
       return res.status(405).json({ error: "Método não permitido" });
     }
 
-    const { text, image } = req.body || {};
+    let { text, image } = req.body || {};
 
-    if (!text && !image) {
-      return res.status(400).json({ error: "Envie texto ou imagem" });
+    // Garantir texto padrão se não houver
+    if (!text || typeof text !== "string" || text.trim() === "") {
+      text = "Analise essa refeição";
+    }
+
+    // Validar imagem
+    if (!isValidImage(image)) {
+      image = undefined; // Não envia se inválida
     }
 
     const content: any[] = [];
 
-    if (text && text.trim() !== "") {
-      content.push({
-        type: "input_text",
-        text: `Analise a refeição com base na imagem e/ou texto.
+    // Texto de análise para a IA
+    content.push({
+      type: "input_text",
+      text: `Analise a refeição com base na imagem e/ou texto.
 
 Seja preciso e estime quantidades reais.
+
+Se algum nutriente não existir, coloque 0.
+
+Se a imagem não for de comida, responda:
+"Não é possível analisar esta imagem. Envie apenas alimentos."
 
 Responda EXATAMENTE neste formato:
 
@@ -61,16 +73,17 @@ Se for pouco saudável, faça um alerta leve sem julgar.
 Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
 
 Sem explicações extras.`
-      });
-    }
+    });
 
-    if (image && isValidImage(image)) {
+    // Adiciona imagem se válida
+    if (image) {
       content.push({
         type: "input_image",
         image_url: image
       });
     }
 
+    // Requisição para OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -97,6 +110,7 @@ Sem explicações extras.`
       });
     }
 
+    // Extrair texto da IA
     const result =
       data.output_text ||
       data.output?.map((o: any) =>
