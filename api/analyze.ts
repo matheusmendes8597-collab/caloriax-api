@@ -1,4 +1,3 @@
-// api/analyze.ts
 export const config = {
   api: {
     bodyParser: true
@@ -24,42 +23,50 @@ export default async function handler(req: any, res: any) {
     const { text, image } = req.body || {};
 
     if (!text && !image) {
-      return res.status(400).json({ error: "Envie texto ou imagem" });
+      return res.status(400).json({
+        error: "Envie texto ou imagem"
+      });
     }
 
     const content: any[] = [];
 
-    // Prompt reforçado para análise precisa
+    // Prompt reforçado para texto e imagem, incluindo contexto brasileiro
     content.push({
       type: "input_text",
-      text: `
-Analise a refeição baseada na imagem e/ou no texto fornecido. 
-Se for apenas texto, use as quantidades mencionadas. 
-Se for imagem, identifique alimentos e estimativa de quantidades.
+      text: `Você é um nutricionista virtual, especialista em alimentação brasileira.
 
-Responda EXATAMENTE neste formato:
+Analise a refeição enviada pelo usuário. Pode ser:
+- Texto descrevendo alimentos e quantidades (ex: "500g arroz, 2 ovos cozidos, feijão")
+- Imagem de alimentos
+- Ambos
 
+Regras:
+
+1. Sempre estime quantidades reais e macronutrientes:
+   - Calorias
+   - Proteínas
+   - Carboidratos
+   - Gorduras
+2. Se a entrada for apenas texto, interprete os alimentos e quantidades.
+3. Se a entrada tiver imagem, use a imagem para identificar alimentos e estimar valores.
+4. Se não for possível identificar a refeição ou for inválida (como água, objetos não alimentares), responda:
+   "Não é possível analisar. Envie apenas alimentos."
+5. Responda **EXATAMENTE** neste formato:
+   
 Calorias: X kcal
 Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-<uma única frase curta (máx. 10-15 palavras) sobre a refeição:
-- se saudável → elogiar
-- se mediana → sugerir melhoria leve
-- se pouco saudável → alerta leve
-- se não for possível analisar → dizer "Não é possível analisar. Envie apenas alimentos."
-Inclua 1 ou 2 emojis que combinem com o contexto.>
+<uma frase curta, natural e humana, de 10-15 palavras, sobre a qualidade da refeição.
+Inclua 1 ou 2 emojis apropriados.
+Se saudável, elogie. Se mediana, sugira melhoria leve. Se pouco saudável, faça alerta leve sem julgar.>
 
-Se não for alimento ou não for possível determinar calorias, proteínas, carboidratos e gorduras:
-- coloque todos como 0
-- use frase: "Não é possível analisar. Envie apenas alimentos."
-
-Não forneça explicações extras.
-      `
+Sem explicações extras.`
     });
 
-    if (image) {
+    // Adiciona imagem se houver e se for válida
+    if (image && (image.startsWith("http://") || image.startsWith("https://") || image.startsWith("data:image/"))) {
       content.push({
         type: "input_image",
         image_url: image
@@ -86,12 +93,14 @@ Não forneça explicações extras.
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("OpenAI API error:", data);
       return res.status(500).json({
         error: "Erro OpenAI",
         details: data
       });
     }
 
+    // Extrai resultado de forma consistente
     const result =
       data.output_text ||
       data.output?.map((o: any) =>
@@ -102,6 +111,7 @@ Não forneça explicações extras.
     return res.status(200).json({ result });
 
   } catch (error: any) {
+    console.error("Erro geral:", error);
     return res.status(500).json({
       error: "Erro geral",
       details: error.message
