@@ -49,7 +49,12 @@ Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-Sem explicações.`
+Frase: <uma frase curta, natural e humana. 
+Se a refeição for saudável, elogie. 
+Se for mediana, sugira melhoria leve. 
+Se for pouco saudável, faça um alerta leve sem julgar.>
+
+Sem explicações extras.
       });
     }
 
