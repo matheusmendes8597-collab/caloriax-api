@@ -7,7 +7,6 @@ export const config = {
 declare const process: any;
 
 export default async function handler(req: any, res: any) {
-  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -21,10 +20,7 @@ export default async function handler(req: any, res: any) {
       return res.status(405).json({ error: "Método não permitido" });
     }
 
-    // ✅ BODY SIMPLES (corrigido)
     const { text, image } = req.body || {};
-
-    console.log("BODY RECEBIDO:", req.body);
 
     if (!text && !image) {
       return res.status(400).json({
@@ -32,13 +28,11 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 🔥 MONTA INPUT (texto + imagem)
     const content: any[] = [];
 
-    if (text) {
-      content.push({
-        type: "input_text",
-        text: `Analise a refeição (imagem e/ou texto): ${text || ""}.
+    content.push({
+      type: "input_text",
+      text: `Analise a refeição com base na imagem e/ou texto.
 
 Seja preciso e estime quantidades reais.
 
@@ -49,14 +43,14 @@ Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-Frase: <uma frase curta, natural e humana. 
-Se a refeição for saudável, elogie. 
+Frase: <uma única frase curta (máx. 10 a 15 palavras), natural e humana, sobre a qualidade da refeição. 
+Se for saudável, elogie. 
 Se for mediana, sugira melhoria leve. 
-Se for pouco saudável, faça um alerta leve sem julgar.>
+Se for pouco saudável, faça um alerta leve sem julgar. 
+Inclua 1 ou 2 emojis no máximo que combinem com o contexto da frase.>
 
-Sem explicações extras.
-      });
-    }
+Sem explicações extras.`
+    });
 
     if (image) {
       content.push({
@@ -84,9 +78,6 @@ Sem explicações extras.
 
     const data = await response.json();
 
-    console.log("STATUS:", response.status);
-    console.log("DATA:", JSON.stringify(data));
-
     if (!response.ok) {
       return res.status(500).json({
         error: "Erro OpenAI",
@@ -94,7 +85,6 @@ Sem explicações extras.
       });
     }
 
-    // ✅ RESPOSTA SEGURA
     const result =
       data.output_text ||
       data.output?.map((o: any) =>
