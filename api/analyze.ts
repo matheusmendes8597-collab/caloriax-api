@@ -35,7 +35,16 @@ export default async function handler(req: any, res: any) {
         messages: [
           {
             role: "user",
-            content: `Calcule calorias, proteínas, carboidratos e gorduras de: ${text}`
+            content: `Analise a refeição: ${text}.
+
+Responda APENAS neste formato:
+
+Calorias: X kcal
+Proteínas: X g
+Carboidratos: X g
+Gorduras: X g
+
+Sem explicações.`
           }
         ]
       })
