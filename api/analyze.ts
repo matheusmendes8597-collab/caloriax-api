@@ -43,11 +43,11 @@ Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-Frase: <uma única frase curta (máx. 10 a 15 palavras), natural e humana, sobre a qualidade da refeição. 
-Se for saudável, elogie. 
-Se for mediana, sugira melhoria leve. 
-Se for pouco saudável, faça um alerta leve sem julgar. 
-Inclua 1 ou 2 emojis no máximo que combinem com o contexto da frase.>
+<uma única frase curta (máx. 10 a 15 palavras), natural e humana, sobre a qualidade da refeição.
+Se for saudável, elogie.
+Se for mediana, sugira melhoria leve.
+Se for pouco saudável, faça um alerta leve sem julgar.
+Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
 
 Sem explicações extras.`
     });
