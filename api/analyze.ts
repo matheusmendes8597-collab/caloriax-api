@@ -6,17 +6,6 @@ export const config = {
 
 declare const process: any;
 
-function isValidImage(image: string) {
-  if (!image || typeof image !== "string") return false;
-
-  if (image.startsWith("http://") || image.startsWith("https://")) {
-    return /\.(jpeg|jpg|png|gif|webp)$/i.test(image);
-  }
-
-  const base64Pattern = /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/;
-  return base64Pattern.test(image);
-}
-
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -31,15 +20,19 @@ export default async function handler(req: any, res: any) {
       return res.status(405).json({ error: "Método não permitido" });
     }
 
-    let { text, image } = req.body || {};
+    const { text, image } = req.body || {};
 
-    if (!text || typeof text !== "string" || text.trim() === "") {
-      text = "Analise essa refeição";
+    if (!text && !image) {
+      return res.status(400).json({ error: "Envie texto ou imagem" });
     }
 
-    if (!isValidImage(image)) {
-      image = undefined;
-    }
+    // Função para validar URL simples (http/https)
+    const isValidUrl = (url: string) =>
+      /^https?:\/\/.+/.test(url);
+
+    // Função para validar base64 simples
+    const isBase64 = (str: string) =>
+      typeof str === "string" && /^data:image\/(png|jpeg|jpg|gif|webp);base64,/.test(str);
 
     const content: any[] = [];
 
@@ -49,7 +42,9 @@ export default async function handler(req: any, res: any) {
 
 Seja preciso e estime quantidades reais.
 
-Se algum nutriente não existir, coloque 0.
+- Se algum nutriente não existir ou for zero, coloque 0.
+- Nunca invente números altos para alimentos sem calorias (como água ou gelo).
+- Se a imagem ou texto não representar alimento, responda: "Não é possível analisar esta imagem. Envie apenas alimentos."
 
 Responda EXATAMENTE neste formato:
 
@@ -67,7 +62,8 @@ Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
 Sem explicações extras.`
     });
 
-    if (image) {
+    // Só enviar campo image se for URL válida ou base64 válido
+    if (image && (isValidUrl(image) || isBase64(image))) {
       content.push({
         type: "input_image",
         image_url: image
