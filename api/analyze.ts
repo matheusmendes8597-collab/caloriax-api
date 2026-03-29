@@ -1,3 +1,5 @@
+// api/analyze.ts
+
 export const config = {
   api: {
     bodyParser: true
@@ -5,6 +7,8 @@ export const config = {
 };
 
 declare const process: any;
+
+const VALID_IMAGE_FORMATS = ["image/jpeg", "image/png", "image/webp"];
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -23,56 +27,46 @@ export default async function handler(req: any, res: any) {
     const { text, image } = req.body || {};
 
     if (!text && !image) {
-      return res.status(400).json({
-        error: "Envie texto ou imagem"
-      });
+      return res.status(400).json({ error: "Envie texto ou imagem" });
     }
 
     const content: any[] = [];
 
-    // Prompt reforçado para texto e imagem, incluindo contexto brasileiro
+    // Prompt principal para análise
     content.push({
       type: "input_text",
-      text: `Você é um nutricionista virtual, especialista em alimentação brasileira.
-
-Analise a refeição enviada pelo usuário. Pode ser:
-- Texto descrevendo alimentos e quantidades (ex: "500g arroz, 2 ovos cozidos, feijão")
-- Imagem de alimentos
-- Ambos
-
-Regras:
-
-1. Sempre estime quantidades reais e macronutrientes:
-   - Calorias
-   - Proteínas
-   - Carboidratos
-   - Gorduras
-2. Se a entrada for apenas texto, interprete os alimentos e quantidades.
-3. Se a entrada tiver imagem, use a imagem para identificar alimentos e estimar valores.
-4. Se não for possível identificar a refeição ou for inválida (como água, objetos não alimentares), responda:
-   "Não é possível analisar. Envie apenas alimentos."
-5. Responda **EXATAMENTE** neste formato:
-   
+      text: `Você é um nutricionista digital. Analise a refeição com base na imagem ou no texto.
+      
+- Se for texto, sempre gere estimativas mesmo que aproximadas.
+- Considere porções médias brasileiras para cada alimento.
+- Responda EXATAMENTE neste formato:
+  
 Calorias: X kcal
 Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-<uma frase curta, natural e humana, de 10-15 palavras, sobre a qualidade da refeição.
-Inclua 1 ou 2 emojis apropriados.
-Se saudável, elogie. Se mediana, sugira melhoria leve. Se pouco saudável, faça alerta leve sem julgar.>
+<uma frase natural e humana sobre a qualidade da refeição. Máx 15 palavras. Se saudável, elogie; se mediana, sugira melhoria leve; se pouco saudável, faça alerta leve. Inclua até 2 emojis que combinem com a refeição.>
 
-Sem explicações extras.`
+- Se a imagem não for de alimento ou estiver em formato inválido, retorne: "Não é possível analisar. Envie apenas alimentos."`
     });
 
-    // Adiciona imagem se houver e se for válida
-    if (image && (image.startsWith("http://") || image.startsWith("https://") || image.startsWith("data:image/"))) {
-      content.push({
-        type: "input_image",
-        image_url: image
-      });
+    // Só envia imagem se ela estiver presente e em formato válido
+    if (image) {
+      // Se for URL, enviar normalmente
+      if (typeof image === "string") {
+        content.push({
+          type: "input_image",
+          image_url: image
+        });
+      } else {
+        return res.status(400).json({
+          error: "Não é possível analisar. Envie apenas alimentos."
+        });
+      }
     }
 
+    // Chamada à API OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -93,14 +87,12 @@ Sem explicações extras.`
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("OpenAI API error:", data);
       return res.status(500).json({
         error: "Erro OpenAI",
         details: data
       });
     }
 
-    // Extrai resultado de forma consistente
     const result =
       data.output_text ||
       data.output?.map((o: any) =>
@@ -111,7 +103,6 @@ Sem explicações extras.`
     return res.status(200).json({ result });
 
   } catch (error: any) {
-    console.error("Erro geral:", error);
     return res.status(500).json({
       error: "Erro geral",
       details: error.message
