@@ -50,6 +50,8 @@ export default async function handler(req: any, res: any) {
 
     const data = await response.json();
 
+console.log("OPENAI RESPONSE:", JSON.stringify(data, null, 2));
+
     const resultText =
       data.output_text ||
       data.output?.map((item: any) =>
