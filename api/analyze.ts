@@ -18,31 +18,29 @@ export default async function handler(req: any, res: any) {
     const body =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    const { imageUrl, text } = body || {};
+    const { text } = body || {};
 
-    if (!imageUrl && !text) {
-      return res.status(400).json({ error: "Envie imagem ou texto" });
+    if (!text) {
+      return res.status(400).json({ error: "Envie uma descrição da refeição" });
     }
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "o4-mini",
-        input: [
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Você é um nutricionista. Sempre responda com calorias, proteínas, carboidratos e gorduras de forma direta."
+          },
           {
             role: "user",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  text ||
-                  "Analise essa refeição e informe calorias, proteínas, carboidratos e gorduras."
-              }
-            ]
+            content: text
           }
         ]
       })
@@ -50,16 +48,10 @@ export default async function handler(req: any, res: any) {
 
     const data = await response.json();
 
-console.log("OPENAI RESPONSE:", JSON.stringify(data, null, 2));
-
-    const resultText =
-      data.output_text ||
-      data.output?.map((item: any) =>
-        item.content?.map((c: any) => c.text).join(" ")
-      ).join(" ");
+    const result = data.choices?.[0]?.message?.content;
 
     return res.status(200).json({
-      result: resultText || "Erro ao interpretar resposta"
+      result: result || "Erro ao analisar refeição"
     });
 
   } catch (error) {
