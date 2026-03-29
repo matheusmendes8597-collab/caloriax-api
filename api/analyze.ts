@@ -9,12 +9,10 @@ declare const process: any;
 function isValidImage(image: string) {
   if (!image || typeof image !== "string") return false;
 
-  // Verifica se é URL válida
   if (image.startsWith("http://") || image.startsWith("https://")) {
     return /\.(jpeg|jpg|png|gif|webp)$/i.test(image);
   }
 
-  // Verifica se é base64 válido
   const base64Pattern = /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/;
   return base64Pattern.test(image);
 }
@@ -35,19 +33,16 @@ export default async function handler(req: any, res: any) {
 
     let { text, image } = req.body || {};
 
-    // Garantir texto padrão se não houver
     if (!text || typeof text !== "string" || text.trim() === "") {
       text = "Analise essa refeição";
     }
 
-    // Validar imagem
     if (!isValidImage(image)) {
-      image = undefined; // Não envia se inválida
+      image = undefined;
     }
 
     const content: any[] = [];
 
-    // Texto de análise para a IA
     content.push({
       type: "input_text",
       text: `Analise a refeição com base na imagem e/ou texto.
@@ -55,9 +50,6 @@ export default async function handler(req: any, res: any) {
 Seja preciso e estime quantidades reais.
 
 Se algum nutriente não existir, coloque 0.
-
-Se a imagem não for de comida, responda:
-"Não é possível analisar esta imagem. Envie apenas alimentos."
 
 Responda EXATAMENTE neste formato:
 
@@ -75,7 +67,6 @@ Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
 Sem explicações extras.`
     });
 
-    // Adiciona imagem se válida
     if (image) {
       content.push({
         type: "input_image",
@@ -83,7 +74,6 @@ Sem explicações extras.`
       });
     }
 
-    // Requisição para OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -110,7 +100,6 @@ Sem explicações extras.`
       });
     }
 
-    // Extrair texto da IA
     const result =
       data.output_text ||
       data.output?.map((o: any) =>
