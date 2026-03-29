@@ -50,13 +50,12 @@ export default async function handler(req: any, res: any) {
 
     const data = await response.json();
 
-    return res.status(200).json({
-      result:
-        data.output?.[0]?.content?.[0]?.text ||
-        "Erro ao interpretar resposta"
-    });
+    const resultText =
+  data.output_text ||
+  data.output?.map((item: any) =>
+    item.content?.map((c: any) => c.text).join(" ")
+  ).join(" ");
 
-  } catch (error) {
-    return res.status(500).json({ error: "Erro ao analisar refeição" });
-  }
-}
+return res.status(200).json({
+  result: resultText || "Erro ao interpretar resposta"
+});
