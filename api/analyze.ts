@@ -15,8 +15,19 @@ export default async function handler(req: any, res: any) {
       return res.status(405).json({ error: "Método não permitido" });
     }
 
-    const body =
-      typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+   let body = req.body;
+
+if (!body) {
+  const raw = await new Promise((resolve) => {
+    let data = "";
+    req.on("data", (chunk: any) => {
+      data += chunk;
+    });
+    req.on("end", () => resolve(data));
+  });
+
+  body = JSON.parse(raw || "{}");
+}
 
     const { text, image } = body || {};
 
