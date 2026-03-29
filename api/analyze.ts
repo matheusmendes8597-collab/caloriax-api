@@ -18,25 +18,22 @@ export default async function handler(req: any, res: any) {
     const body =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    const { text } = body || {};
+    const { text, image } = body || {};
 
-    if (!text) {
-      return res.status(400).json({ error: "Envie uma descrição" });
+    if (!text && !image) {
+      return res.status(400).json({
+        error: "Envie texto ou imagem"
+      });
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "user",
-            content: `Analise a refeição: ${text}.
+    // 🔥 MONTA INPUT (texto + imagem)
+    const content: any[] = [];
 
+    if (text) {
+      content.push({
+        type: "input_text",
+        text: `Analise a refeição: ${text}.
+        
 Responda APENAS neste formato:
 
 Calorias: X kcal
@@ -45,6 +42,28 @@ Carboidratos: X g
 Gorduras: X g
 
 Sem explicações.`
+      });
+    }
+
+    if (image) {
+      content.push({
+        type: "input_image",
+        image_url: image // base64 OU URL
+      });
+    }
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        input: [
+          {
+            role: "user",
+            content
           }
         ]
       })
@@ -52,7 +71,10 @@ Sem explicações.`
 
     const data = await response.json();
 
-    // 🔥 MOSTRAR ERRO REAL
+    // 🔥 DEBUG FORTE
+    console.log("STATUS:", response.status);
+    console.log("DATA:", JSON.stringify(data));
+
     if (!response.ok) {
       return res.status(500).json({
         error: "Erro OpenAI",
@@ -60,9 +82,10 @@ Sem explicações.`
       });
     }
 
-    return res.status(200).json({
-      result: data.choices?.[0]?.message?.content || "Sem resposta"
-    });
+    const result =
+      data.output?.[0]?.content?.[0]?.text || "Sem resposta";
+
+    return res.status(200).json({ result });
 
   } catch (error: any) {
     return res.status(500).json({
