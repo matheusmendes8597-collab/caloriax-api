@@ -1,3 +1,9 @@
+export const config = {
+  api: {
+    bodyParser: true
+  }
+};
+
 declare const process: any;
 
 export default async function handler(req: any, res: any) {
@@ -15,36 +21,10 @@ export default async function handler(req: any, res: any) {
       return res.status(405).json({ error: "Método não permitido" });
     }
 
-    // 🔥 CORREÇÃO BODY (100% FUNCIONAL)
-    let body: any = req.body;
+    // ✅ BODY SIMPLES (corrigido)
+    const { text, image } = req.body || {};
 
-    if (!body) {
-      const raw = await new Promise<string>((resolve) => {
-        let data = "";
-        req.on("data", (chunk: any) => {
-          data += chunk;
-        });
-        req.on("end", () => resolve(data));
-      });
-
-      try {
-        body = JSON.parse(raw || "{}");
-      } catch {
-        body = {};
-      }
-    }
-
-    if (typeof body === "string") {
-      try {
-        body = JSON.parse(body);
-      } catch {
-        body = {};
-      }
-    }
-
-    console.log("BODY RECEBIDO:", body);
-
-    const { text, image } = body || {};
+    console.log("BODY RECEBIDO:", req.body);
 
     if (!text && !image) {
       return res.status(400).json({
@@ -99,7 +79,6 @@ Sem explicações.`
 
     const data = await response.json();
 
-    // 🔥 DEBUG
     console.log("STATUS:", response.status);
     console.log("DATA:", JSON.stringify(data));
 
@@ -110,7 +89,7 @@ Sem explicações.`
       });
     }
 
-    // 🔥 RESPOSTA SEGURA (funciona em todos os casos)
+    // ✅ RESPOSTA SEGURA
     const result =
       data.output_text ||
       data.output?.map((o: any) =>
