@@ -26,11 +26,7 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "Envie texto ou imagem" });
     }
 
-    // Função para validar URL simples (http/https)
-    const isValidUrl = (url: string) =>
-      /^https?:\/\/.+/.test(url);
-
-    // Função para validar base64 simples
+    const isValidUrl = (url: string) => /^https?:\/\/.+/.test(url);
     const isBase64 = (str: string) =>
       typeof str === "string" && /^data:image\/(png|jpeg|jpg|gif|webp);base64,/.test(str);
 
@@ -44,7 +40,7 @@ Seja preciso e estime quantidades reais.
 
 - Se algum nutriente não existir ou for zero, coloque 0.
 - Nunca invente números altos para alimentos sem calorias (como água ou gelo).
-- Se a imagem ou texto não representar alimento, responda: "Não é possível analisar esta imagem. Envie apenas alimentos."
+- Se a imagem ou texto não representar alimento, responda: "Não é possível analisar. Envie apenas alimentos."
 
 Responda EXATAMENTE neste formato:
 
@@ -62,7 +58,6 @@ Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
 Sem explicações extras.`
     });
 
-    // Só enviar campo image se for URL válida ou base64 válido
     if (image && (isValidUrl(image) || isBase64(image))) {
       content.push({
         type: "input_image",
