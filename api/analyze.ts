@@ -6,6 +6,18 @@ export const config = {
 
 declare const process: any;
 
+function isValidImage(image: string) {
+  if (!image || typeof image !== "string") return false;
+
+  // Verifica se é URL válida (http/https)
+  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)$/i.test(image)) return true;
+
+  // Verifica se é Base64 válido (início típico de data URI)
+  if (/^data:image\/(jpeg|png|gif|webp);base64,[A-Za-z0-9+/=]+$/i.test(image)) return true;
+
+  return false;
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -23,16 +35,15 @@ export default async function handler(req: any, res: any) {
     const { text, image } = req.body || {};
 
     if (!text && !image) {
-      return res.status(400).json({
-        error: "Envie texto ou imagem"
-      });
+      return res.status(400).json({ error: "Envie texto ou imagem" });
     }
 
     const content: any[] = [];
 
-    content.push({
-      type: "input_text",
-      text: `Analise a refeição com base na imagem e/ou texto.
+    if (text && text.trim() !== "") {
+      content.push({
+        type: "input_text",
+        text: `Analise a refeição com base na imagem e/ou texto.
 
 Seja preciso e estime quantidades reais.
 
@@ -50,9 +61,10 @@ Se for pouco saudável, faça um alerta leve sem julgar.
 Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
 
 Sem explicações extras.`
-    });
+      });
+    }
 
-    if (image) {
+    if (image && isValidImage(image)) {
       content.push({
         type: "input_image",
         image_url: image
