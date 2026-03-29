@@ -15,19 +15,34 @@ export default async function handler(req: any, res: any) {
       return res.status(405).json({ error: "Método não permitido" });
     }
 
-   let body = req.body;
+    // 🔥 CORREÇÃO BODY (100% FUNCIONAL)
+    let body: any = req.body;
 
-if (!body) {
-  const raw = await new Promise((resolve) => {
-    let data = "";
-    req.on("data", (chunk: any) => {
-      data += chunk;
-    });
-    req.on("end", () => resolve(data));
-  });
+    if (!body) {
+      const raw = await new Promise<string>((resolve) => {
+        let data = "";
+        req.on("data", (chunk: any) => {
+          data += chunk;
+        });
+        req.on("end", () => resolve(data));
+      });
 
-  body = JSON.parse(raw || "{}");
-}
+      try {
+        body = JSON.parse(raw || "{}");
+      } catch {
+        body = {};
+      }
+    }
+
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+
+    console.log("BODY RECEBIDO:", body);
 
     const { text, image } = body || {};
 
@@ -43,9 +58,11 @@ if (!body) {
     if (text) {
       content.push({
         type: "input_text",
-        text: `Analise a refeição: ${text}.
-        
-Responda APENAS neste formato:
+        text: `Analise a refeição (imagem e/ou texto): ${text || ""}.
+
+Seja preciso e estime quantidades reais.
+
+Responda EXATAMENTE neste formato:
 
 Calorias: X kcal
 Proteínas: X g
@@ -59,7 +76,7 @@ Sem explicações.`
     if (image) {
       content.push({
         type: "input_image",
-        image_url: image // base64 OU URL
+        image_url: image
       });
     }
 
@@ -82,7 +99,7 @@ Sem explicações.`
 
     const data = await response.json();
 
-    // 🔥 DEBUG FORTE
+    // 🔥 DEBUG
     console.log("STATUS:", response.status);
     console.log("DATA:", JSON.stringify(data));
 
@@ -93,8 +110,13 @@ Sem explicações.`
       });
     }
 
+    // 🔥 RESPOSTA SEGURA (funciona em todos os casos)
     const result =
-      data.output?.[0]?.content?.[0]?.text || "Sem resposta";
+      data.output_text ||
+      data.output?.map((o: any) =>
+        o.content?.map((c: any) => c.text).join("")
+      ).join("") ||
+      "Sem resposta";
 
     return res.status(200).json({ result });
 
