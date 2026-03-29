@@ -1,13 +1,15 @@
 // api/analyze.ts
+
 export const config = {
   api: {
-    bodyParser: true,
-  },
+    bodyParser: true
+  }
 };
 
 declare const process: any;
 
 export default async function handler(req: any, res: any) {
+  // Headers CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -21,59 +23,68 @@ export default async function handler(req: any, res: any) {
       return res.status(405).json({ error: "Método não permitido" });
     }
 
-    let { text, image } = req.body || {};
+    const { text, image } = req.body || {};
 
+    // Se não houver texto nem imagem
     if (!text && !image) {
       return res.status(400).json({ error: "Envie texto ou imagem" });
     }
 
-    // Se texto vazio, usar fallback
-    if (!text) text = "Analise essa refeição";
+    // Validar imagem apenas se houver
+    const hasValidImage =
+      typeof image === "string" &&
+      (image.startsWith("http://") || image.startsWith("https://") || image.startsWith("data:image/"));
 
-    // Construindo conteúdo para a API
+    // Conteúdo para o modelo
     const content: any[] = [];
 
     content.push({
       type: "input_text",
-      text: `Analise a refeição baseada em texto detalhado e imagem (se houver).
-      
-Se não houver informação suficiente, responda: "Não é possível analisar. Envie apenas alimentos."
+      text: `Analise a refeição com base na imagem e/ou texto.
+Seja preciso e estime quantidades reais.
 
-Se houver dados suficientes, forneça EXATAMENTE no formato:
+Responda EXATAMENTE neste formato:
+
 Calorias: X kcal
 Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-Inclua uma única frase curta, natural, sobre a refeição, considerando saúde e quantidade. Máx 15 palavras. Inclua 1-2 emojis apropriados.
+<uma única frase curta (máx. 10 a 15 palavras), natural e humana, sobre a qualidade da refeição.
+Se for saudável, elogie.
+Se for mediana, sugira melhoria leve.
+Se for pouco saudável, faça um alerta leve sem julgar.
+Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
 
-Não invente valores se não houver dados claros.`
+Se a imagem ou descrição não representar alimento, responda exatamente:
+"Não é possível analisar. Envie apenas alimentos."
+
+Sem explicações extras.`
     });
 
-    // Só enviar imagem se for URL http/https ou base64 válido
-    if (image && (typeof image === "string") && (image.startsWith("http://") || image.startsWith("https://") || image.startsWith("data:image/"))) {
+    if (hasValidImage) {
       content.push({
         type: "input_image",
-        image_url: image,
+        image_url: image
       });
     }
 
-    // Requisição para OpenAI
+    // Chamada para API OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
         input: [
           {
             role: "user",
-            content,
-          },
-        ],
-      }),
+            content
+          }
+        ]
+      })
     });
 
     const data = await response.json();
@@ -81,23 +92,24 @@ Não invente valores se não houver dados claros.`
     if (!response.ok) {
       return res.status(500).json({
         error: "Erro OpenAI",
-        details: data,
+        details: data
       });
     }
 
-    // Pegar resultado final
+    // Extrair resultado
     const result =
       data.output_text ||
       data.output?.map((o: any) =>
         o.content?.map((c: any) => c.text).join("")
       ).join("") ||
-      "Não é possível analisar. Envie apenas alimentos.";
+      "Sem resposta";
 
     return res.status(200).json({ result });
+
   } catch (error: any) {
     return res.status(500).json({
       error: "Erro geral",
-      details: error.message,
+      details: error.message
     });
   }
 }
