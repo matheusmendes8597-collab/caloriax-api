@@ -19,20 +19,18 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Método não permitido" });
-    }
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Método não permitido" });
+  }
 
+  try {
     const { text, image } = req.body || {};
 
     if (!text && !image) {
-      return res.status(400).json({
-        error: "Envie texto ou imagem",
-      });
+      return res.status(400).json({ error: "Envie texto ou imagem" });
     }
 
-    // Se houver imagem, verificar se é um formato suportado
+    // Validar formato da imagem
     if (image) {
       const lowerImage = image.toLowerCase();
       const isValidFormat = SUPPORTED_IMAGE_FORMATS.some((ext) =>
@@ -41,18 +39,17 @@ export default async function handler(req: any, res: any) {
 
       if (!isValidFormat) {
         return res.status(400).json({
-          error:
-            "Formato de imagem não suportado. Use jpeg, jpg, png, gif, webp ou avif.",
+          error: "Formato de imagem não suportado. Use jpeg, jpg, png, gif, webp ou avif.",
         });
       }
     }
 
-    // Preparar conteúdo para a IA
-    const content: any[] = [];
-
-    content.push({
-      type: "input_text",
-      text: `Você é um nutricionista virtual brasileiro. Analise a refeição enviada via texto e/ou imagem.
+    // Construir prompt da IA
+    const content: any[] = [
+      {
+        type: "input_text",
+        text: `
+Você é um nutricionista virtual brasileiro. Analise a refeição enviada via texto e/ou imagem.
 Seja preciso na estimativa de calorias, proteínas, carboidratos e gorduras. 
 Se algum nutriente não estiver presente, coloque 0.
 Responda **EXATAMENTE** neste formato:
@@ -63,11 +60,14 @@ Carboidratos: X g
 Gorduras: X g
 
 <uma frase curta, natural, humana, de acordo com a refeição e quantidade de calorias.
-Se for saudável, elogie. Se for mediana, sugira melhoria leve. Se for pouco saudável, faça alerta leve sem julgar.
-Inclua até 2 emojis compatíveis.>
-
-Não inclua nenhum outro texto, cabeçalho ou palavra como "Reflexão". Apenas o formato acima.`
-    });
+Se for saudável, elogie.
+Se for mediana, sugira melhoria leve e ingredientes que combinam.
+Se for pouco saudável, faça alerta leve sem julgar.
+Inclua até 2 emojis compatíveis.
+Não inclua nenhum outro texto, cabeçalho ou palavra como "Reflexão".>
+        `,
+      },
+    ];
 
     if (image) {
       content.push({
@@ -97,28 +97,20 @@ Não inclua nenhum outro texto, cabeçalho ou palavra como "Reflexão". Apenas o
 
     if (!response.ok) {
       console.error("OpenAI Error:", data);
-      return res.status(500).json({
-        error: "Erro OpenAI",
-        details: data,
-      });
+      return res.status(500).json({ error: "Erro OpenAI", details: data });
     }
 
+    // Extrair resultado
     const result =
       data.output_text ||
       data.output
-        ?.map((o: any) =>
-          o.content?.map((c: any) => c.text).join("")
-        )
+        ?.map((o: any) => o.content?.map((c: any) => c.text).join(""))
         .join("") ||
       "Não é possível analisar. Envie apenas alimentos.";
 
-    // Retornar o resultado final
     return res.status(200).json({ result });
   } catch (error: any) {
     console.error("Analyze Error:", error);
-    return res.status(500).json({
-      error: "Erro geral",
-      details: error.message,
-    });
+    return res.status(500).json({ error: "Erro geral", details: error.message });
   }
 }
