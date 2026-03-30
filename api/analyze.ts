@@ -8,8 +8,6 @@ export const config = {
 
 declare const process: any;
 
-const VALID_IMAGE_FORMATS = ["image/jpeg", "image/png", "image/webp"];
-
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -27,46 +25,68 @@ export default async function handler(req: any, res: any) {
     const { text, image } = req.body || {};
 
     if (!text && !image) {
-      return res.status(400).json({ error: "Envie texto ou imagem" });
+      return res.status(400).json({
+        error: "Envie texto ou imagem"
+      });
     }
 
     const content: any[] = [];
 
-    // Prompt principal para análise
-    content.push({
-      type: "input_text",
-      text: `Você é um nutricionista digital. Analise a refeição com base na imagem ou no texto.
-      
-- Se for texto, sempre gere estimativas mesmo que aproximadas.
-- Considere porções médias brasileiras para cada alimento.
+    if (text && !image) {
+      // Texto enviado, criar prompt reforçado para alimentos brasileiros
+      content.push({
+        type: "input_text",
+        text: `Você é um nutricionista brasileiro. Analise a refeição descrita abaixo e estime quantidades reais. 
+
+Instruções:
+- Estime calorias, proteínas, carboidratos e gorduras.
+- Se algum valor não puder ser estimado, use 0.
 - Responda EXATAMENTE neste formato:
-  
+
 Calorias: X kcal
 Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-<uma frase natural e humana sobre a qualidade da refeição. Máx 15 palavras. Se saudável, elogie; se mediana, sugira melhoria leve; se pouco saudável, faça alerta leve. Inclua até 2 emojis que combinem com a refeição.>
+<uma frase curta e natural (máx. 10-15 palavras) sobre a qualidade da refeição, incluindo 1 ou 2 emojis apropriados>
 
-- Se a imagem não for de alimento ou estiver em formato inválido, retorne: "Não é possível analisar. Envie apenas alimentos."`
-    });
+Refeição: ${text}`
+      });
+    } else if (image) {
+      // Imagem enviada, validar formato antes
+      const allowedFormats = ["jpeg", "jpg", "png", "gif", "webp", "avif"];
+      const extension = image.split(".").pop()?.toLowerCase();
 
-    // Só envia imagem se ela estiver presente e em formato válido
-    if (image) {
-      // Se for URL, enviar normalmente
-      if (typeof image === "string") {
-        content.push({
-          type: "input_image",
-          image_url: image
-        });
-      } else {
+      if (!extension || !allowedFormats.includes(extension)) {
         return res.status(400).json({
-          error: "Não é possível analisar. Envie apenas alimentos."
+          error: "Formato de imagem não suportado. Use jpeg, jpg, png, gif, webp ou avif."
         });
       }
+
+      // Prompt para imagem
+      content.push({
+        type: "input_text",
+        text: `Você é um nutricionista brasileiro. Analise a refeição na imagem enviada e estime quantidades reais.
+
+Instruções:
+- Estime calorias, proteínas, carboidratos e gorduras.
+- Se algum valor não puder ser estimado, use 0.
+- Responda EXATAMENTE neste formato:
+
+Calorias: X kcal
+Proteínas: X g
+Carboidratos: X g
+Gorduras: X g
+
+<uma frase curta e natural (máx. 10-15 palavras) sobre a qualidade da refeição, incluindo 1 ou 2 emojis apropriados>`
+      });
+
+      content.push({
+        type: "input_image",
+        image_url: image
+      });
     }
 
-    // Chamada à API OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -93,6 +113,7 @@ Gorduras: X g
       });
     }
 
+    // Extrair o texto do modelo
     const result =
       data.output_text ||
       data.output?.map((o: any) =>
