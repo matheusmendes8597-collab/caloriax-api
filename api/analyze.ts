@@ -22,71 +22,64 @@ export default async function handler(req: any, res: any) {
       return res.status(405).json({ error: "Método não permitido" });
     }
 
-    const { text, image } = req.body || {};
+    let { text, image } = req.body || {};
 
-    if (!text && !image) {
-      return res.status(400).json({
-        error: "Envie texto ou imagem"
-      });
-    }
+    // Se não houver texto, usar placeholder
+    if (!text) text = "Analise esta refeição";
 
-    const content: any[] = [];
-
-    if (text && !image) {
-      // Texto enviado, criar prompt reforçado para alimentos brasileiros
-      content.push({
+    const content: any[] = [
+      {
         type: "input_text",
-        text: `Você é um nutricionista brasileiro. Analise a refeição descrita abaixo e estime quantidades reais. 
+        text: `Analise a refeição com base na imagem e/ou texto.
 
-Instruções:
-- Estime calorias, proteínas, carboidratos e gorduras.
-- Se algum valor não puder ser estimado, use 0.
-- Responda EXATAMENTE neste formato:
+Seja preciso e estime quantidades reais.
+
+Responda EXATAMENTE neste formato:
 
 Calorias: X kcal
 Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-<uma frase curta e natural (máx. 10-15 palavras) sobre a qualidade da refeição, incluindo 1 ou 2 emojis apropriados>
+<uma frase curta (máx. 10-15 palavras), natural e humana, sobre a qualidade da refeição.
+Se for saudável, elogie.
+Se for mediana, sugira melhoria leve.
+Se for pouco saudável, faça um alerta leve sem julgar.
+Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
 
-Refeição: ${text}`
-      });
-    } else if (image) {
-      // Imagem enviada, validar formato antes
-      const allowedFormats = ["jpeg", "jpg", "png", "gif", "webp", "avif"];
-      const extension = image.split(".").pop()?.toLowerCase();
+Se não for possível analisar (ex.: objeto não comestível), responda: "Não é possível analisar. Envie apenas alimentos."`
+      }
+    ];
 
-      if (!extension || !allowedFormats.includes(extension)) {
+    // Processar a imagem somente se existir e for suportada
+    if (image) {
+      // Suporte para URL ou base64
+      if (
+        typeof image === "string" &&
+        (image.startsWith("http://") || image.startsWith("https://") || image.startsWith("data:image/"))
+      ) {
+        // Verificar extensão de imagem suportada
+        const supportedFormats = ["jpeg", "jpg", "png", "gif", "webp", "avif"];
+        const extMatch = image.match(/\.(\w+)(?:\?|$)/i);
+        const format = extMatch ? extMatch[1].toLowerCase() : "";
+        if (!supportedFormats.includes(format) && !image.startsWith("data:image/")) {
+          return res.status(400).json({
+            error: "Formato de imagem não suportado. Use jpeg, jpg, png, gif, webp ou avif."
+          });
+        }
+
+        content.push({
+          type: "input_image",
+          image_url: image
+        });
+      } else {
         return res.status(400).json({
-          error: "Formato de imagem não suportado. Use jpeg, jpg, png, gif, webp ou avif."
+          error: "Imagem inválida. Envie uma URL pública ou base64 válido."
         });
       }
-
-      // Prompt para imagem
-      content.push({
-        type: "input_text",
-        text: `Você é um nutricionista brasileiro. Analise a refeição na imagem enviada e estime quantidades reais.
-
-Instruções:
-- Estime calorias, proteínas, carboidratos e gorduras.
-- Se algum valor não puder ser estimado, use 0.
-- Responda EXATAMENTE neste formato:
-
-Calorias: X kcal
-Proteínas: X g
-Carboidratos: X g
-Gorduras: X g
-
-<uma frase curta e natural (máx. 10-15 palavras) sobre a qualidade da refeição, incluindo 1 ou 2 emojis apropriados>`
-      });
-
-      content.push({
-        type: "input_image",
-        image_url: image
-      });
     }
 
+    // Chamada à OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -113,12 +106,10 @@ Gorduras: X g
       });
     }
 
-    // Extrair o texto do modelo
+    // Extrair texto da resposta
     const result =
       data.output_text ||
-      data.output?.map((o: any) =>
-        o.content?.map((c: any) => c.text).join("")
-      ).join("") ||
+      data.output?.map((o: any) => o.content?.map((c: any) => c.text).join("")).join("") ||
       "Não é possível analisar. Envie apenas alimentos.";
 
     return res.status(200).json({ result });
@@ -126,7 +117,7 @@ Gorduras: X g
   } catch (error: any) {
     return res.status(500).json({
       error: "Erro geral",
-      details: error.message
+      details: error.message || error
     });
   }
 }
