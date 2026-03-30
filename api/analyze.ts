@@ -1,5 +1,4 @@
 // api/analyze.ts
-
 export const config = {
   api: {
     bodyParser: true
@@ -22,18 +21,21 @@ export default async function handler(req: any, res: any) {
       return res.status(405).json({ error: "Método não permitido" });
     }
 
-    let { text, image } = req.body || {};
+    const { text, image } = req.body || {};
 
-    // Se não houver texto, usar placeholder
-    if (!text) text = "Analise esta refeição";
+    if (!text && !image) {
+      return res.status(400).json({
+        error: "Envie texto ou imagem"
+      });
+    }
 
-    const content: any[] = [
-      {
-        type: "input_text",
-        text: `Analise a refeição com base na imagem e/ou texto.
+    const content: any[] = [];
 
+    // Prompt principal
+    content.push({
+      type: "input_text",
+      text: `Você é um nutricionista brasileiro. Analise a refeição com base na imagem e/ou texto.
 Seja preciso e estime quantidades reais.
-
 Responda EXATAMENTE neste formato:
 
 Calorias: X kcal
@@ -41,45 +43,35 @@ Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-<uma frase curta (máx. 10-15 palavras), natural e humana, sobre a qualidade da refeição.
-Se for saudável, elogie.
-Se for mediana, sugira melhoria leve.
-Se for pouco saudável, faça um alerta leve sem julgar.
-Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
+<uma frase curta (máx. 10 a 15 palavras), natural e humana, sobre a qualidade da refeição, de acordo com a comida e quantidade.
+Inclua 1 ou 2 emojis que combinem.>
 
-Se não for possível analisar (ex.: objeto não comestível), responda: "Não é possível analisar. Envie apenas alimentos."`
-      }
-    ];
+Se não for alimento ou não conseguir identificar:
+- Responda: "Não é possível analisar. Envie apenas alimentos."
+Sem explicações extras.`
+    });
 
-    // Processar a imagem somente se existir e for suportada
-    if (image) {
-      // Suporte para URL ou base64
-      if (
-        typeof image === "string" &&
-        (image.startsWith("http://") || image.startsWith("https://") || image.startsWith("data:image/"))
-      ) {
-        // Verificar extensão de imagem suportada
-        const supportedFormats = ["jpeg", "jpg", "png", "gif", "webp", "avif"];
-        const extMatch = image.match(/\.(\w+)(?:\?|$)/i);
-        const format = extMatch ? extMatch[1].toLowerCase() : "";
-        if (!supportedFormats.includes(format) && !image.startsWith("data:image/")) {
-          return res.status(400).json({
-            error: "Formato de imagem não suportado. Use jpeg, jpg, png, gif, webp ou avif."
-          });
-        }
+    // Adiciona imagem somente se for válida
+    if (image && typeof image === "string" && image.trim() !== "") {
+      const validFormats = ["jpeg", "jpg", "png", "gif", "webp", "avif"];
+      const extMatch = image.match(/\.(\w+)(?:\?.*)?$/);
+      const ext = extMatch ? extMatch[1].toLowerCase() : null;
 
-        content.push({
-          type: "input_image",
-          image_url: image
-        });
-      } else {
+      if (!ext || !validFormats.includes(ext)) {
         return res.status(400).json({
-          error: "Imagem inválida. Envie uma URL pública ou base64 válido."
+          error: `Formato de imagem não suportado. Use ${validFormats.join(", ")}.`
         });
       }
+
+      content.push({
+        type: "input_image",
+        image_url: image
+      });
     }
 
-    // Chamada à OpenAI
+    // Placeholder se não houver texto
+    const promptText = text && text.trim() !== "" ? text : "Analise esta refeição";
+
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -106,18 +98,23 @@ Se não for possível analisar (ex.: objeto não comestível), responda: "Não �
       });
     }
 
-    // Extrair texto da resposta
-    const result =
+    // Extrair o resultado do GPT
+    let result =
       data.output_text ||
-      data.output?.map((o: any) => o.content?.map((c: any) => c.text).join("")).join("") ||
+      data.output?.map((o: any) =>
+        o.content?.map((c: any) => c.text).join("")
+      ).join("") ||
       "Não é possível analisar. Envie apenas alimentos.";
+
+    // Remover prefixos indesejados como Reflexão: ou Resumo:
+    result = result.replace(/^(Reflexão:|Resumo:)\s*/i, "");
 
     return res.status(200).json({ result });
 
   } catch (error: any) {
     return res.status(500).json({
       error: "Erro geral",
-      details: error.message || error
+      details: error.message
     });
   }
 }
