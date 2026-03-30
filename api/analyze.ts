@@ -7,6 +7,8 @@ export const config = {
 
 declare const process: any;
 
+const SUPPORTED_IMAGE_FORMATS = ["jpeg", "jpg", "png", "gif", "webp", "avif"];
+
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -29,49 +31,52 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    // Validação de imagem
+    if (image) {
+      const ext = image.split(".").pop()?.toLowerCase();
+      if (!ext || !SUPPORTED_IMAGE_FORMATS.includes(ext)) {
+        return res.status(400).json({
+          error: `Formato de imagem não suportado. Use ${SUPPORTED_IMAGE_FORMATS.join(
+            ", "
+          )}.`
+        });
+      }
+    }
+
     const content: any[] = [];
 
-    // Prompt principal
-    content.push({
-      type: "input_text",
-      text: `Você é um nutricionista brasileiro. Analise a refeição com base na imagem e/ou texto.
-Seja preciso e estime quantidades reais.
-Responda EXATAMENTE neste formato:
+    // Prompt para IA
+    let promptText = `
+Analise a refeição fornecida pelo usuário.
+Se houver imagem, analise a comida na imagem.
+Se houver apenas texto, estime calorias e macros com base no texto.
+Se não for possível analisar, responda: "Não é possível analisar. Envie apenas alimentos."
 
+Formato EXATO da resposta:
 Calorias: X kcal
 Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-<uma frase curta (máx. 10 a 15 palavras), natural e humana, sobre a qualidade da refeição, de acordo com a comida e quantidade.
-Inclua 1 ou 2 emojis que combinem.>
+<uma única frase curta (máx. 10 a 15 palavras), natural e humana, sobre a qualidade da refeição.
+Se for saudável, elogie.
+Se for mediana, sugira melhoria leve.
+Se for pouco saudável, faça um alerta leve sem julgar.
+Inclua 1 ou 2 emojis no máximo que combinem com o contexto.>
 
-Se não for alimento ou não conseguir identificar:
-- Responda: "Não é possível analisar. Envie apenas alimentos."
-Sem explicações extras.`
-    });
+Sem textos extras tipo "Reflexão:" ou qualquer outro cabeçalho.
+`;
 
-    // Adiciona imagem somente se for válida
-    if (image && typeof image === "string" && image.trim() !== "") {
-      const validFormats = ["jpeg", "jpg", "png", "gif", "webp", "avif"];
-      const extMatch = image.match(/\.(\w+)(?:\?.*)?$/);
-      const ext = extMatch ? extMatch[1].toLowerCase() : null;
+    content.push({ type: "input_text", text: promptText });
 
-      if (!ext || !validFormats.includes(ext)) {
-        return res.status(400).json({
-          error: `Formato de imagem não suportado. Use ${validFormats.join(", ")}.`
-        });
-      }
-
+    if (image) {
       content.push({
         type: "input_image",
         image_url: image
       });
     }
 
-    // Placeholder se não houver texto
-    const promptText = text && text.trim() !== "" ? text : "Analise esta refeição";
-
+    // Chamada OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -98,16 +103,13 @@ Sem explicações extras.`
       });
     }
 
-    // Extrair o resultado do GPT
-    let result =
+    // Extrair texto da resposta da IA
+    const result =
       data.output_text ||
       data.output?.map((o: any) =>
         o.content?.map((c: any) => c.text).join("")
       ).join("") ||
       "Não é possível analisar. Envie apenas alimentos.";
-
-    // Remover prefixos indesejados como Reflexão: ou Resumo:
-    result = result.replace(/^(Reflexão:|Resumo:)\s*/i, "");
 
     return res.status(200).json({ result });
 
