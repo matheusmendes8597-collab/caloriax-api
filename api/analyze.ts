@@ -1,5 +1,4 @@
 // api/analyze.ts
-
 export const config = {
   api: {
     bodyParser: true,
@@ -15,43 +14,47 @@ export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Método não permitido" });
   }
 
-  try {
-    const { text, image } = req.body || {};
+  const { text, image } = req.body || {};
 
-    if (!text && !image) {
-      return res.status(400).json({ error: "Envie texto ou imagem" });
-    }
+  if (!text && !image) {
+    return res.status(400).json({ error: "Envie texto ou imagem" });
+  }
 
-    // Validar formato da imagem
-    if (image) {
-      const lowerImage = image.toLowerCase();
-      const isValidFormat = SUPPORTED_IMAGE_FORMATS.some((ext) =>
+  // Verificar formato da imagem
+  if (image) {
+    const lowerImage = image.toLowerCase();
+    const isValidFormat = SUPPORTED_IMAGE_FORMATS.some(
+      (ext) =>
         lowerImage.endsWith("." + ext) || lowerImage.startsWith(`data:image/${ext}`)
-      );
+    );
 
-      if (!isValidFormat) {
-        return res.status(400).json({
-          error: "Formato de imagem não suportado. Use jpeg, jpg, png, gif, webp ou avif.",
-        });
-      }
+    if (!isValidFormat) {
+      return res.status(400).json({
+        error:
+          "Formato de imagem não suportado. Use jpeg, jpg, png, gif, webp ou avif.",
+      });
     }
+  }
 
-    // Construir prompt da IA
-    const content: any[] = [
-      {
+  try {
+    const content: any[] = [];
+
+    // Prompt para texto ou imagem
+    if (text && !image) {
+      // --- PROMPT DE TEXTO LITERAL ---
+      content.push({
         type: "input_text",
-        text: `
-Você é um nutricionista virtual brasileiro. Analise a refeição enviada via texto e/ou imagem.
-Seja preciso na estimativa de calorias, proteínas, carboidratos e gorduras. 
-Se algum nutriente não estiver presente, coloque 0.
+        text: `Você é um nutricionista virtual brasileiro. Recebi o seguinte texto literal de alimentos: "${text}".
+Analise **literalmente** cada alimento e estime calorias, proteínas, carboidratos e gorduras com base em valores médios.  
+Se algum nutriente não estiver presente, coloque 0.  
+Não invente valores arbitrários para alimentos como água, gelo ou temperos sem calorias.
+
 Responda **EXATAMENTE** neste formato:
 
 Calorias: X kcal
@@ -59,17 +62,32 @@ Proteínas: X g
 Carboidratos: X g
 Gorduras: X g
 
-<uma frase curta, natural, humana, de acordo com a refeição e quantidade de calorias.
-Se for saudável, elogie.
-Se for mediana, sugira melhoria leve e ingredientes que combinam.
-Se for pouco saudável, faça alerta leve sem julgar.
-Inclua até 2 emojis compatíveis.
-Não inclua nenhum outro texto, cabeçalho ou palavra como "Reflexão".>
-        `,
-      },
-    ];
+<uma frase curta natural e humana, de acordo com a refeição. Inclua sugestão de ingredientes que combinam, elogio leve se saudável, ou alerta leve se não for saudável, até 2 emojis>
+
+Não inclua outros textos, títulos ou palavras como "Reflexão".`
+      });
+    }
 
     if (image) {
+      // --- PROMPT PARA IMAGEM ---
+      content.push({
+        type: "input_text",
+        text: `Você é um nutricionista virtual brasileiro. Analise a refeição enviada via imagem.
+Seja preciso na estimativa de calorias, proteínas, carboidratos e gorduras. 
+Se algum nutriente não estiver presente, coloque 0.
+
+Responda **EXATAMENTE** neste formato:
+
+Calorias: X kcal
+Proteínas: X g
+Carboidratos: X g
+Gorduras: X g
+
+<uma frase curta natural, humana, de acordo com a refeição e quantidade de calorias. Sugira ingredientes que combinem, elogie se saudável, alerta leve se pouco saudável, até 2 emojis>
+
+Não inclua outros textos, títulos ou palavras como "Reflexão".`
+      });
+
       content.push({
         type: "input_image",
         image_url: image,
@@ -84,12 +102,7 @@ Não inclua nenhum outro texto, cabeçalho ou palavra como "Reflexão".>
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        input: [
-          {
-            role: "user",
-            content,
-          },
-        ],
+        input: [{ role: "user", content }],
       }),
     });
 
@@ -100,11 +113,12 @@ Não inclua nenhum outro texto, cabeçalho ou palavra como "Reflexão".>
       return res.status(500).json({ error: "Erro OpenAI", details: data });
     }
 
-    // Extrair resultado
     const result =
       data.output_text ||
       data.output
-        ?.map((o: any) => o.content?.map((c: any) => c.text).join(""))
+        ?.map((o: any) =>
+          o.content?.map((c: any) => c.text).join("")
+        )
         .join("") ||
       "Não é possível analisar. Envie apenas alimentos.";
 
