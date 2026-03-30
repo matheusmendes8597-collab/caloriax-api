@@ -31,7 +31,8 @@ export default async function handler(req: any, res: any) {
     const lowerImage = image.toLowerCase();
     const isValidFormat = SUPPORTED_IMAGE_FORMATS.some(
       (ext) =>
-        lowerImage.endsWith("." + ext) || lowerImage.startsWith(`data:image/${ext}`)
+        lowerImage.endsWith("." + ext) ||
+        lowerImage.startsWith(`data:image/${ext}`)
     );
 
     if (!isValidFormat) {
@@ -45,14 +46,13 @@ export default async function handler(req: any, res: any) {
   try {
     const content: any[] = [];
 
-    // Prompt para texto ou imagem
+    // --- PROMPT PARA TEXTO ---
     if (text && !image) {
-      // --- PROMPT DE TEXTO LITERAL ---
       content.push({
         type: "input_text",
         text: `Você é um nutricionista virtual brasileiro. Recebi o seguinte texto literal de alimentos: "${text}".
-Analise **literalmente** cada alimento e estime calorias, proteínas, carboidratos e gorduras com base em valores médios.  
-Se algum nutriente não estiver presente, coloque 0.  
+Analise **literalmente** cada alimento e estime calorias, proteínas, carboidratos e gorduras com base em valores médios.
+Se algum nutriente não estiver presente, coloque 0.
 Não invente valores arbitrários para alimentos como água, gelo ou temperos sem calorias.
 
 Responda **EXATAMENTE** neste formato:
@@ -68,15 +68,11 @@ Não inclua outros textos, títulos ou palavras como "Reflexão".`
       });
     }
 
+    // --- PROMPT PARA IMAGEM ---
     if (image) {
-      // --- PROMPT PARA IMAGEM ---
       content.push({
         type: "input_text",
         text: `Você é um nutricionista virtual brasileiro. Analise a refeição enviada via imagem.
-if (image) {
-  content.push({
-    type: "input_text",
-    text: `Você é um nutricionista virtual brasileiro. Analise a refeição enviada via imagem.
 Se a imagem NÃO contiver comida ou bebida comestível, responda **EXATAMENTE**:
 "Não é possível analisar. Envie apenas alimentos."
 
@@ -94,14 +90,15 @@ Gorduras: X g
 <uma frase curta natural, humana, de acordo com a refeição e quantidade de calorias. Sugira ingredientes que combinem, elogie se saudável, alerta leve se pouco saudável, até 2 emojis>
 
 Não inclua outros textos, títulos ou palavras como "Reflexão".`
-  });
+      });
 
-  content.push({
-    type: "input_image",
-    image_url: image,
-  });
-}
+      content.push({
+        type: "input_image",
+        image_url: image,
+      });
+    }
 
+    // Chamada da API OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -121,12 +118,11 @@ Não inclua outros textos, títulos ou palavras como "Reflexão".`
       return res.status(500).json({ error: "Erro OpenAI", details: data });
     }
 
+    // Extrair resultado
     const result =
       data.output_text ||
       data.output
-        ?.map((o: any) =>
-          o.content?.map((c: any) => c.text).join("")
-        )
+        ?.map((o: any) => o.content?.map((c: any) => c.text).join(""))
         .join("") ||
       "Não é possível analisar. Envie apenas alimentos.";
 
