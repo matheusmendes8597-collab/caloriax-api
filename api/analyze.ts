@@ -73,8 +73,16 @@ Não inclua outros textos, títulos ou palavras como "Reflexão".`
       content.push({
         type: "input_text",
         text: `Você é um nutricionista virtual brasileiro. Analise a refeição enviada via imagem.
-Seja preciso na estimativa de calorias, proteínas, carboidratos e gorduras. 
-Se algum nutriente não estiver presente, coloque 0.
+if (image) {
+  content.push({
+    type: "input_text",
+    text: `Você é um nutricionista virtual brasileiro. Analise a refeição enviada via imagem.
+Se a imagem NÃO contiver comida ou bebida comestível, responda **EXATAMENTE**:
+"Não é possível analisar. Envie apenas alimentos."
+
+Se houver comida:
+- Seja preciso na estimativa de calorias, proteínas, carboidratos e gorduras.
+- Se algum nutriente não estiver presente, coloque 0.
 
 Responda **EXATAMENTE** neste formato:
 
@@ -86,13 +94,13 @@ Gorduras: X g
 <uma frase curta natural, humana, de acordo com a refeição e quantidade de calorias. Sugira ingredientes que combinem, elogie se saudável, alerta leve se pouco saudável, até 2 emojis>
 
 Não inclua outros textos, títulos ou palavras como "Reflexão".`
-      });
+  });
 
-      content.push({
-        type: "input_image",
-        image_url: image,
-      });
-    }
+  content.push({
+    type: "input_image",
+    image_url: image,
+  });
+}
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
