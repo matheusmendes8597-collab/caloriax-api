@@ -1,4 +1,5 @@
-// api/analyze.ts
+// api/cali.ts
+
 export const config = {
   api: {
     bodyParser: true,
@@ -7,108 +8,72 @@ export const config = {
 
 declare const process: any;
 
-const SUPPORTED_IMAGE_FORMATS = ["jpeg", "jpg", "png", "gif", "webp", "avif"];
-
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Método não permitido" });
   }
 
-  const { text, image } = req.body || {};
-
-  if (!text && !image) {
-    return res.status(400).json({ error: "Envie texto ou imagem" });
-  }
-
-  // Verificar formato da imagem
-  if (image) {
-    const lowerImage = image.toLowerCase();
-    const isValidFormat = SUPPORTED_IMAGE_FORMATS.some(
-      (ext) =>
-        lowerImage.endsWith("." + ext) ||
-        lowerImage.startsWith(`data:image/${ext}`)
-    );
-
-    if (!isValidFormat) {
-      return res.status(400).json({
-        error:
-          "Formato de imagem não suportado. Use jpeg, jpg, png, gif, webp ou avif.",
-      });
-    }
-  }
-
   try {
-    const content: any[] = [];
+    // ✅ SEM destructuring (corrige o bug)
+    const body = req.body || {};
+    const message = body.message;
+    const user = body.user;
+    const analyses = body.analyses;
 
-    // --- PROMPT PARA TEXTO ---
-    if (text && !image) {
-      content.push({
-        type: "input_text",
-        text: `Você é um nutricionista virtual brasileiro. Recebi o seguinte texto literal de alimentos: "${text}".
-Se o texto **não contiver alimentos ou bebidas comestíveis**, responda **EXATAMENTE**:
-"Não é possível analisar. Envie apenas alimentos."
-
-Se o texto contiver alimentos (inclusive água, gelo, bebidas sem calorias):
-- Analise **literalmente** cada alimento e estime calorias, proteínas, carboidratos e gorduras com base em valores médios.
-- Se algum nutriente não estiver presente, coloque 0.
-
-Responda **EXATAMENTE** neste formato:
-
-Calorias: X kcal
-Proteínas: X g
-Carboidratos: X g
-Gorduras: X g
-
-<uma frase curta natural e humana, de acordo com a refeição. Inclua sugestão de ingredientes que combinam, elogio leve se saudável, ou alerta leve se não for saudável, até 2 emojis>
-
-Não inclua outros textos, títulos ou palavras como "Reflexão".`
-      });
+    if (!message) {
+      return res.status(400).json({ error: "Mensagem é obrigatória" });
     }
 
-    // --- PROMPT PARA IMAGEM ---
-    if (image) {
-      content.push({
-        type: "input_text",
-        text: `Você é um nutricionista virtual brasileiro. Analise a refeição enviada via imagem.
-Se a imagem **não contiver comida ou bebida comestível**, responda **EXATAMENTE**:
-"Não é possível analisar. Envie apenas alimentos."
+    const hasAnalyses = analyses && analyses.length > 0;
 
-Se a imagem contiver **apenas água, gelo, chá sem açúcar ou bebidas sem calorias**, responda **EXATAMENTE** com todos os nutrientes como 0:
+    const userContext = `
+Nome: ${user?.name || "Não informado"}
+Peso: ${user?.weight || "Não informado"} kg
+Altura: ${user?.height || "Não informado"} cm
+Objetivo: ${user?.goal || "Não informado"}
+`;
 
-Calorias: 0 kcal
-Proteínas: 0 g
-Carboidratos: 0 g
-Gorduras: 0 g
+    const analysesContext = hasAnalyses
+      ? `
+Refeições recentes:
+${analyses
+  .map(
+    (a: any) =>
+      `- ${a.foods?.join(", ") || "Alimentos não especificados"} | ${
+        a.calories || 0
+      } kcal`
+  )
+  .join("\n")}
+`
+      : `Nenhuma refeição registrada recentemente.`;
 
-Se houver comida ou bebida com valor nutricional:
-- Seja preciso na estimativa de calorias, proteínas, carboidratos e gorduras.
-- Se algum nutriente não estiver presente, coloque 0.
+    const prompt = `
+Você é o Cali, um nutricionista virtual da Caloriax IA.
 
-Responda **EXATAMENTE** neste formato:
+- Fale em português
+- Seja direto
+- Máx 5 linhas
+- Use até 2 emojis
+- Use **negrito** quando importante
 
-Calorias: X kcal
-Proteínas: X g
-Carboidratos: X g
-Gorduras: X g
+DADOS:
+${userContext}
 
-<uma frase curta natural, humana, de acordo com a refeição e quantidade de calorias. Sugira ingredientes que combinem, elogie se saudável, alerta leve se pouco saudável, até 2 emojis>
+HISTÓRICO:
+${analysesContext}
 
-Não inclua outros textos, títulos ou palavras como "Reflexão".`
-      });
+Pergunta:
+${message}
+`;
 
-      content.push({
-        type: "input_image",
-        image_url: image,
-      });
-    }
-
-    // Chamada da API OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -117,28 +82,25 @@ Não inclua outros textos, títulos ou palavras como "Reflexão".`
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        input: [{ role: "user", content }],
+        input: prompt,
       }),
     });
 
     const data = await response.json();
 
-    if (!response.ok) {
-      console.error("OpenAI Error:", data);
-      return res.status(500).json({ error: "Erro OpenAI", details: data });
-    }
-
-    // Extrair resultado
     const result =
       data.output_text ||
       data.output
         ?.map((o: any) => o.content?.map((c: any) => c.text).join(""))
         .join("") ||
-      "Não é possível analisar. Envie apenas alimentos.";
+      "Erro ao responder.";
 
     return res.status(200).json({ result });
+
   } catch (error: any) {
-    console.error("Analyze Error:", error);
-    return res.status(500).json({ error: "Erro geral", details: error.message });
+    return res.status(500).json({
+      error: "Erro geral",
+      details: error.message,
+    });
   }
 }
