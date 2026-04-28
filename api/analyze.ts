@@ -1,3 +1,5 @@
+import PocketBase from "pocketbase";
+
 export const config = {
   api: {
     bodyParser: true,
@@ -8,10 +10,21 @@ declare const process: any;
 
 const SUPPORTED_IMAGE_FORMATS = ["jpeg", "jpg", "png", "gif", "webp", "avif"];
 
+const pb = new PocketBase(process.env.POCKETBASE_URL);
+
+const ALLOWED_ORIGINS = [
+  "https://caloriax.app",
+  "http://localhost:5173",
+];
+
 export default async function handler(req: any, res: any) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // CORS restrito por origem (com guard para origin undefined)
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-api-key");
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -19,7 +32,20 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: "Método não permitido" });
   }
 
-  const { text, image } = req.body || {};
+  // Validar chave interna (com fallback seguro se env não estiver definida)
+  if (
+    !process.env.INTERNAL_API_KEY ||
+    req.headers["x-api-key"] !== process.env.INTERNAL_API_KEY
+  ) {
+    return res.status(401).json({ error: "Acesso negado" });
+  }
+
+  const { text, image, user } = req.body || {};
+
+  // Bloquear sem usuário ou id inválido
+  if (!user?.id || typeof user.id !== "string") {
+    return res.status(401).json({ error: "Não autorizado" });
+  }
 
   if (!text && !image) {
     return res.status(400).json({ error: "Envie texto ou imagem" });
@@ -41,6 +67,20 @@ export default async function handler(req: any, res: any) {
           "Formato de imagem não suportado. Use jpeg, jpg, png, gif, webp ou avif.",
       });
     }
+  }
+
+  // Validar usuário no PocketBase
+  let userRecord: any;
+
+  try {
+    userRecord = await pb.collection("users").getOne(user.id);
+  } catch {
+    return res.status(401).json({ error: "Usuário inválido" });
+  }
+
+  // Limitar uso diário
+  if ((userRecord.analyses_count || 0) >= 30) {
+    return res.status(403).json({ error: "Limite diário atingido" });
   }
 
   try {
@@ -141,11 +181,14 @@ Não inclua outros textos, títulos ou palavras como "Reflexão".`,
     const result =
       data.output_text ||
       data.output
-        ?.map((o: any) =>
-          o.content?.map((c: any) => c.text).join("")
-        )
+        ?.map((o: any) => o.content?.map((c: any) => c.text).join(""))
         .join("") ||
       "Não é possível analisar. Envie apenas alimentos.";
+
+    // Incrementar contador de uso
+    await pb.collection("users").update(user.id, {
+      analyses_count: (userRecord.analyses_count || 0) + 1,
+    });
 
     return res.status(200).json({ result });
   } catch (error: any) {
